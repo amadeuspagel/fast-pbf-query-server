@@ -58,7 +58,7 @@ impl GeoIndex {
                             start.elapsed().as_millis()
                         );
                     }
-                    let name = if let Some(name) = way.tags.get("name") {
+                    let name = if let Some(name) = way.tags.get("wikipedia") {
                         name.to_string()
                     } else {
                         continue;

@@ -43,19 +43,19 @@ struct Response<T> {
 }
 
 #[derive(serde::Serialize)]
-struct AddressResponse {
-    address: String,
+struct DataResponse {
+    wikipedia: String,
 }
 
 #[handler]
 fn query(
     data: Data<&Arc<GeoIndex>>,
     Query(query): Query<QueryParams>,
-) -> Json<Response<AddressResponse>> {
-    if let Some(address) = data.0.find(query.lat, query.lon) {
+) -> Json<Response<DataResponse>> {
+    if let Some(wikipedia) = data.0.find(query.lat, query.lon) {
         Json(Response {
             success: true,
-            data: Some(AddressResponse { address }),
+            data: Some(DataResponse { wikipedia }),
             error: None,
         })
     } else {
