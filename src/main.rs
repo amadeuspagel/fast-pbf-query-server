@@ -1,3 +1,4 @@
+use futures_util::{SinkExt, StreamExt};
 use std::sync::Arc;
 
 use geo::GeoIndex;
@@ -5,17 +6,20 @@ use poem::{
     get, handler,
     listener::TcpListener,
     middleware::Tracing,
-    web::{Data, Json, Query},
+    web::{
+        websocket::{Message, WebSocket},
+        Data,
+    },
     EndpointExt, Route, Server,
 };
 
 use clap::Parser;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct QueryParams {
-    lat: f32,
-    lon: f32,
+    latitude: f32,
+    longitude: f32,
 }
 
 /// Pbf query server
@@ -48,23 +52,54 @@ struct DataResponse {
 }
 
 #[handler]
-fn query(
-    data: Data<&Arc<GeoIndex>>,
-    Query(query): Query<QueryParams>,
-) -> Json<Response<DataResponse>> {
-    if let Some(wikipedia) = data.0.find(query.lat, query.lon) {
-        Json(Response {
-            success: true,
-            data: Some(DataResponse { wikipedia }),
-            error: None,
-        })
-    } else {
-        Json(Response {
-            success: false,
-            data: None,
-            error: Some("No address found".to_string()),
-        })
-    }
+async fn ws_handler(data: Data<&Arc<GeoIndex>>, ws: WebSocket) -> impl poem::IntoResponse {
+    // Clone the Arc to avoid lifetime issues
+    let geo_index = data.0.clone();
+
+    ws.on_upgrade(move |socket| async move {
+        let (mut sink, mut stream) = socket.split();
+
+        while let Some(Ok(msg)) = stream.next().await {
+            if let Message::Text(text) = msg {
+                match serde_json::from_str::<QueryParams>(&text) {
+                    Ok(params) => {
+                        let response = if let Some(wikipedia) =
+                            geo_index.find(params.latitude, params.longitude)
+                        {
+                            Response {
+                                success: true,
+                                data: Some(DataResponse { wikipedia }),
+                                error: None,
+                            }
+                        } else {
+                            Response {
+                                success: false,
+                                data: None,
+                                error: Some("No address found".to_string()),
+                            }
+                        };
+
+                        if let Ok(response_text) = serde_json::to_string(&response) {
+                            if sink.send(Message::Text(response_text)).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let error_response = Response::<DataResponse> {
+                            success: false,
+                            data: None,
+                            error: Some(format!("Invalid query format: {}", e)),
+                        };
+
+                        if let Ok(response_text) = serde_json::to_string(&error_response) {
+                            let _ = sink.send(Message::Text(response_text)).await;
+                        }
+                    }
+                }
+            }
+        }
+    })
 }
 
 #[tokio::main]
@@ -105,7 +140,7 @@ async fn main() -> Result<(), std::io::Error> {
     };
 
     let app = Route::new()
-        .at("/query", get(query))
+        .at("/", get(ws_handler))
         .data(Arc::new(geo))
         .with(Tracing);
     Server::new(TcpListener::bind("0.0.0.0:3000"))

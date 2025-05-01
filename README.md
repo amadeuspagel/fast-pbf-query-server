@@ -62,3 +62,45 @@ Once the server is running, you can test it by making a request using cURL:
 
 `curl http://localhost:3000/query?lat=LAT&lon=LON`
 
+### HTTP API
+
+Send a GET request to `/query` with `lat` and `lon` as query parameters:
+
+```
+GET /query?lat=21.022894363180978&lon=105.80110064069345
+```
+
+Example response:
+```json
+{
+  "success": true,
+  "data": {
+    "wikipedia": "Example Street"
+  }
+}
+```
+
+### WebSocket API
+
+Connect to the WebSocket endpoint at `/ws` and send a JSON payload with the latitude and longitude:
+
+```json
+{
+  "lat": 21.022894363180978,
+  "lon": 105.80110064069345
+}
+```
+
+The server will respond with the same format as the HTTP API:
+
+```json
+{
+  "success": true,
+  "data": {
+    "wikipedia": "Example Street"
+  }
+}
+```
+
+Using WebSockets allows for maintaining a persistent connection and sending multiple queries without the overhead of establishing a new HTTP connection for each request, which can be beneficial for applications requiring frequent reverse geocoding lookups.
+
