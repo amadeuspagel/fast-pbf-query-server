@@ -2,3 +2,4 @@
 .github
 *.index
 *.osm.pbf
+*.sqlite
